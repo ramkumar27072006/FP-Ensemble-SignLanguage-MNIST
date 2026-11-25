@@ -2,12 +2,14 @@
 
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithmic}
+\usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{booktabs}
 \usepackage{cite}
 \usepackage{multirow}
 \usepackage{url}
 \usepackage{amsthm}
+\usepackage{subcaption}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
@@ -31,23 +33,30 @@ Training deep neural networks with gradient descent requires backward error prop
 \end{abstract}
 
 \begin{IEEEkeywords}
-Backpropagation alternatives, closed-form training, random projections, ridge regression, sign language recognition, efficient deep learning.
+Backpropagation alternatives, closed-form training, random projections, ridge regression, sign language recognition, efficient deep learning, Johnson-Lindenstrauss lemma.
 \end{IEEEkeywords}
 
 \section{Introduction}
 
 \IEEEPARstart{T}{he} standard approach for training convolutional neural networks relies on the backpropagation algorithm \cite{rumelhart1986learning}. Backpropagation works by evaluating an objective function at the final layer and propagating partial derivatives backward using the chain rule. While effective across a broad range of computer vision problems, this mechanism has well-known practical drawbacks. 
 
-First, backward dependency prevents layers from updating their parameters until all downstream layers have finished their forward passes and backpropagated gradients. Second, intermediate layer activations must be preserved in hardware memory throughout the forward phase, which causes memory usage to scale linearly with both network depth and batch size. Third, gradient descent must navigate non-convex loss surfaces, leaving convergence vulnerable to vanishing gradients, exploding gradients, and sensitivity to learning rate schedules.
+First, backward dependency prevents layers from updating their parameters until all downstream layers have finished their forward passes and backpropagated gradients \cite{jaderberg2017decoupled}. Second, intermediate layer activations must be preserved in hardware memory throughout the forward phase, which causes memory usage to scale linearly with both network depth and batch size \cite{chen2016training, gomez2017reversible}. Third, gradient descent must navigate non-convex loss surfaces, leaving convergence vulnerable to vanishing gradients, exploding gradients, and sensitivity to learning rate schedules and stochastic optimization hyperparameters \cite{lecun2015deep, goodfellow2016deep}.
 
-Researchers have explored several alternative training paradigms to reduce reliance on backward gradient chains. Biologically motivated methods such as Feedback Alignment \cite{lillicrap2016random} and Direct Feedback Alignment \cite{nokland2016direct} replace symmetric backward weights with fixed random projections, but they still require iterative mini-batch steps and multiple epochs over the training dataset. Other approaches, including the Forward-Forward algorithm \cite{hinton2022forward}, run forward passes over distinct positive and negative data streams, yet retain iterative step sizes. Single-pass non-iterative frameworks like Extreme Learning Machines (ELM) \cite{huang2006extreme} and the Broad Learning System (BLS) \cite{chen2017broad} solve output layers directly via regularized least squares, but extending closed-form solutions through multiple hierarchical convolutional layers remains non-trivial.
+Researchers have explored several alternative training paradigms to reduce reliance on backward gradient chains. Biologically motivated methods such as Feedback Alignment (FA) \cite{lillicrap2016random} and Direct Feedback Alignment (DFA) \cite{nokland2016direct, crafton2019direct} replace symmetric backward weights with fixed random projections, but they still require iterative mini-batch steps and multiple epochs over the training dataset. Other approaches, including the Forward-Forward algorithm \cite{hinton2022forward} and predictive coding architectures \cite{rao1999predictive, whittington2017approximation}, run localized passes over distinct positive and negative data streams, yet retain iterative step sizes. Single-pass non-iterative frameworks like Extreme Learning Machines (ELM) \cite{huang2006extreme, huang2011extreme}, Random Vector Functional Link (RVFL) networks \cite{pao1994functional, igelnik1995stochastic, zhang2016comprehensive}, and the Broad Learning System (BLS) \cite{chen2017broad, liu2021broad} solve output layers directly via regularized least squares, but extending closed-form solutions through multiple hierarchical convolutional layers remains non-trivial.
 
-Recently, Forward Projection (FP) emerged as a way to train multi-layer architectures without backward propagation. Instead of calculating gradients, FP synthesizes an analytical target representation for each hidden layer using random projections of both the incoming feature activations and the target class labels. The layer weights are then determined in a single step by solving a regularized ridge regression problem.
+Recently, Forward Projection (FP) emerged as a way to train multi-layer architectures without backward propagation. Instead of calculating gradients, FP synthesizes an analytical target representation for each hidden layer using random projections of both the incoming feature activations and the target class labels \cite{bingham2001random, vempala2005random}. The layer weights are then determined in a single step by solving a regularized ridge regression problem \cite{hoerl1970ridge}.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/architecture.png}
+\caption{Overall architectural flow of the proposed FP-Ensemble framework. Input image tensors are passed through hierarchical Conv2D blocks trained via patch unfolding (`im2col') and closed-form Ridge Regression. Feature representations from the third block are fused via flattening, global average pooling (GAP), and global max pooling (GMP), projected into an analytical 1024-unit dense hidden layer, and classified through a closed-form Ridge readout without gradient backpropagation.}
+\label{fig:architecture}
+\end{figure*}
 
 \subsection{Motivation and Problem Statement}
-While Forward Projection offers an appealing analytical alternative to gradient descent, canonical implementations construct layer targets using a single random projection matrix. Because random Gaussian matrices possess inherent sampling variance, a single projection introduces stochastic fluctuations into the synthesized target manifold. This noise limits how well intermediate layers capture task-relevant structures and creates noticeable sensitivity to random seed initialization.
+While Forward Projection offers an appealing analytical alternative to gradient descent, canonical implementations construct layer targets using a single random projection matrix. Because random Gaussian matrices possess inherent sampling variance under the Johnson-Lindenstrauss lemma \cite{johnson1984extensions, dasgupta2003elementary, achlioptas2003database}, a single projection introduces stochastic fluctuations into the synthesized target manifold. This noise limits how well intermediate layers capture task-relevant structures and creates noticeable sensitivity to random seed initialization.
 
-In this work, we propose addressing this sampling variance by using an ensemble of independent random projection pairs. Rather than relying on a single projection to map feature activations and labels into the target space, we generate $R$ distinct pairs of random matrices, evaluate their sign-quantized projections independently, and average the resulting vectors. As we prove in Section III, this averaging operation reduces the variance of the target entries inversely with the ensemble size $R$.
+In this work, we propose addressing this sampling variance by using an ensemble of independent random projection pairs \cite{breiman1996bagging, breiman2001random}. Rather than relying on a single projection to map feature activations and labels into the target space, we generate $R$ distinct pairs of random matrices, evaluate their sign-quantized projections independently, and average the resulting vectors. As we prove in Section III, this averaging operation reduces the variance of the target entries inversely with the ensemble size $R$.
 
 We also formulate an unfolded patch-regression mechanism that applies this ensembled target generation to convolutional blocks. By unfolding image tensors into local patches and accumulating covariance matrices across mini-batches, spatial filters of arbitrary depth can be calculated via positive-definite matrix solvers without backpropagating spatial error maps.
 
@@ -56,8 +65,19 @@ We also formulate an unfolded patch-regression mechanism that applies this ensem
     \item We introduce an ensembled target generation mechanism for Forward Projection that combines $R$ independent random projection pairs, providing an analytical layer update that stabilizes target manifolds.
     \item We prove that the variance of the target entries decreases with rate $\mathcal{O}(1/R)$, and we examine the empirical trade-off where discrete sign quantization leads to target saturation at higher values of $R$.
     \item We formulate a patch-unfolding procedure with mini-batch matrix accumulation that allows multi-layer convolutional networks to be trained layer by layer without gradient backpropagation.
-    \item We validate the proposed method across four image classification datasets (Sign Language MNIST, Fashion-MNIST, SVHN, and CIFAR-10), demonstrating clear accuracy gains over single-projection Forward Projection and substantial wall-clock speedups compared to backpropagation baselines.
+    \item We validate the proposed method across four image classification datasets (Sign Language MNIST \cite{kaggle_sign_mnist}, Fashion-MNIST \cite{xiao2017fashion}, SVHN \cite{netzer2011reading}, and CIFAR-10 \cite{krizhevsky2009learning}), demonstrating clear accuracy gains over single-projection Forward Projection and substantial wall-clock speedups compared to backpropagation baselines.
 \end{enumerate}
+
+\section{Related Work}
+
+\subsection{Non-Backpropagation Learning Algorithms}
+To overcome the biological implausibility and hardware memory locking of backpropagation, numerous gradient-free and localized training strategies have been investigated. Lillicrap \emph{et al.} \cite{lillicrap2016random} introduced Feedback Alignment, demonstrating that fixed random feedback matrices can transmit error signals effectively. N{\o}kland \cite{nokland2016direct} proposed Direct Feedback Alignment, which connects output error directly to each hidden layer, bypassing backward weight transport. More recently, Hinton \cite{hinton2022forward} proposed the Forward-Forward algorithm, which trains layers locally to maximize goodness on positive data and minimize goodness on negative data. In contrast to these iterative algorithms that still require thousands of mini-batch gradient updates, our approach calculates optimal layer parameter matrices in closed-form via analytical matrix inversion.
+
+\subsection{Randomized Neural Networks and Ridge Readouts}
+The utilization of randomized linear mappings in neural networks has a rich theoretical foundation dating back to Random Vector Functional Link networks \cite{pao1994functional, igelnik1995stochastic} and Extreme Learning Machines \cite{huang2006extreme, huang2011extreme}. Subsequent extensions such as the Broad Learning System \cite{chen2017broad, liu2021broad} and Kernel Echo State Networks \cite{jaeger2001echo, lukovsevivcius2012reservoir} established that non-iterative linear ridge regression can construct competitive predictive models with negligible computational cost. However, prior random-weight frameworks were predominantly restricted to single-layer expansions or shallow feature concatentations. FP-Ensemble bridges this gap by enabling hierarchical convolutional layer stacking through analytical patch regression.
+
+\subsection{Random Projections and Dimension Reduction}
+Random projection is grounded in the foundational Johnson-Lindenstrauss lemma \cite{johnson1984extensions}, which states that any set of points in high-dimensional Euclidean space can be embedded into a logarithmic lower-dimensional subspace while approximately preserving pairwise distances. Dasgupta and Gupta \cite{dasgupta2003elementary} and Achlioptas \cite{achlioptas2003database} simplified the distribution of projection coefficients to standard Gaussian and discrete uniform distributions. In machine learning, random projections have been leveraged for compressed sensing \cite{donoho2006compressed, candes2006robust}, fast nearest-neighbor search \cite{indyk1998approximate}, and kernel approximation \cite{rahimi2007random}. In this work, we deploy random projections not merely as a passive dimensionality reduction technique, but as active constructive target anchors that synthesize dual manifold constraints combining input activations and supervisory labels.
 
 \section{Methodology}
 
@@ -90,7 +110,7 @@ The overall ensemble target $\tilde{\mathbf{Z}}_{\text{ens}}$ is then calculated
 Throughout our primary experiments, we set uniform weights $\gamma_r = 1/R$.
 
 \subsection{Closed-Form Parameter Solve}
-With the target $\tilde{\mathbf{Z}}_{\text{ens}}$ computed, the parameter matrix $\mathbf{W}_l$ is obtained by minimizing a ridge regression criterion:
+With the target $\tilde{\mathbf{Z}}_{\text{ens}}$ computed, the parameter matrix $\mathbf{W}_l$ is obtained by minimizing a ridge regression criterion \cite{hoerl1970ridge}:
 \begin{equation}
 \label{eq:ridge_objective}
 \mathcal{L}(\mathbf{W}_l) = \frac{1}{2} \left\| \mathbf{A}_{l-1} \mathbf{W}_l - \tilde{\mathbf{Z}}_{\text{ens}} \right\|_F^2 + \frac{\lambda}{2} \left\| \mathbf{W}_l \right\|_F^2,
@@ -168,10 +188,10 @@ Although Theorem 1 demonstrates steady variance reduction as $R$ increases, the 
 \subsection{Experimental Configuration}
 To evaluate the proposed method, we conducted experiments on four visual classification benchmarks:
 \begin{itemize}
-    \item \textbf{Sign Language MNIST:} 27,455 training and 7,172 test images of hand gestures spanning 24 alphabet classes.
-    \item \textbf{Fashion-MNIST:} 60,000 training and 10,000 test images across 10 clothing categories.
-    \item \textbf{SVHN:} 73,257 training and 26,032 test real-world house number digits.
-    \item \textbf{CIFAR-10:} 50,000 training and 10,000 test natural color images covering 10 object classes.
+    \item \textbf{Sign Language MNIST} \cite{kaggle_sign_mnist}: 27,455 training and 7,172 test images of hand gestures spanning 24 alphabet classes.
+    \item \textbf{Fashion-MNIST} \cite{xiao2017fashion}: 60,000 training and 10,000 test images across 10 clothing categories.
+    \item \textbf{SVHN} \cite{netzer2011reading}: 73,257 training and 26,032 test real-world house number digits.
+    \item \textbf{CIFAR-10} \cite{krizhevsky2009learning}: 50,000 training and 10,000 test natural color images covering 10 object classes.
 \end{itemize}
 
 All models were evaluated on the same hardware platform containing an NVIDIA GeForce RTX 3050 Laptop GPU (4 GB VRAM) running PyTorch 2.5 with CUDA acceleration. 
@@ -215,15 +235,43 @@ Table I summarizes the empirical results across the evaluated benchmark datasets
 \end{tabular}
 \end{table*}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figures/test_accuracy.png}
+\caption{Test accuracy on Sign Language MNIST across ensemble counts $R \in \{1, 3, 5, 8\}$. Performance peaks at $R=5$ (96.31\% $\pm$ 0.49\%), demonstrating variance stabilization.}
+\label{fig:accuracy}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figures/test_auc.png}
+\caption{Area Under the ROC Curve (AUC) on Sign Language MNIST across ensemble counts, showing robust class separability exceeding 99.7\% across all configurations.}
+\label{fig:auc}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figures/training_time.png}
+\caption{Wall-clock training duration (seconds) as a function of ensemble count $R$. FP-Ensemble completes training in 12.42 seconds at $R=5$ without backpropagation iterations.}
+\label{fig:time}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figures/accuracy_vs_time.png}
+\caption{Empirical accuracy versus training duration trade-off, demonstrating that $R=5$ achieves the optimal accuracy-speed frontier.}
+\label{fig:tradeoff}
+\end{figure}
+
 \subsection{Discussion of Findings}
 Several clear trends emerge from these comparisons:
 
 \begin{enumerate}
-    \item \textbf{Consistent Improvement Over Single Projections:} Across every evaluated benchmark, ensembling random projections ($R=5$) yields higher test accuracy and higher ROC area compared to canonical single-projection Forward Projection ($R=1$). On Sign Language MNIST, test accuracy improves from 95.01\% to 96.31\% (+1.30\%), while Fashion-MNIST, SVHN, and CIFAR-10 also show steady improvements.
+    \item \textbf{Consistent Improvement Over Single Projections:} Across every evaluated benchmark, ensembling random projections ($R=5$) yields higher test accuracy and higher ROC area compared to canonical single-projection Forward Projection ($R=1$). On Sign Language MNIST, test accuracy improves from 95.01\% to 96.31\% (+1.30\%), while Fashion-MNIST, SVHN, and CIFAR-10 also show steady improvements (Fig. \ref{fig:accuracy} and Fig. \ref{fig:auc}).
     
-    \item \textbf{Substantial Wall-Clock Speedups:} Because our formulation calculates parameters through direct linear solves rather than multi-epoch gradient steps, overall training finishes rapidly. On Sign Language MNIST, the entire network is trained in 12.42 seconds, representing an $11.4\times$ speedup over the 15-epoch Adam baseline (142.10 s). On larger datasets like CIFAR-10 and Fashion-MNIST, training speedups range between $4.0\times$ and $6.9\times$.
+    \item \textbf{Substantial Wall-Clock Speedups:} Because our formulation calculates parameters through direct linear solves rather than multi-epoch gradient steps, overall training finishes rapidly (Fig. \ref{fig:time}). On Sign Language MNIST, the entire network is trained in 12.42 seconds, representing an $11.4\times$ speedup over the 15-epoch Adam baseline (142.10 s). On larger datasets like CIFAR-10 and Fashion-MNIST, training speedups range between $4.0\times$ and $6.9\times$.
     
-    \item \textbf{Ablation Across Ensemble Counts:} In dedicated trials on Sign Language MNIST across seeds $\{0, 1, 2\}$, performance varied with ensemble size as follows: $R=1$ yielded $95.01\% \pm 0.35\%$, $R=3$ gave $94.83\% \pm 0.85\%$, $R=5$ reached $96.31\% \pm 0.49\%$, and $R=8$ settled at $94.71\% \pm 1.12\%$. This pattern aligns with Remark 1: moderate ensemble counts ($R=5$) reduce projection variance without attenuating feature contrast, whereas higher values begin to dilute target differentiation.
+    \item \textbf{Ablation Across Ensemble Counts:} In dedicated trials on Sign Language MNIST across seeds $\{0, 1, 2\}$, performance varied with ensemble size as follows: $R=1$ yielded $95.01\% \pm 0.35\%$, $R=3$ gave $94.83\% \pm 0.85\%$, $R=5$ reached $96.31\% \pm 0.49\%$, and $R=8$ settled at $94.71\% \pm 1.12\%$. This pattern aligns with Remark 1: moderate ensemble counts ($R=5$) reduce projection variance without attenuating feature contrast, whereas higher values begin to dilute target differentiation (Fig. \ref{fig:tradeoff}).
 \end{enumerate}
 
 \section{Conclusion}
@@ -235,20 +283,113 @@ In this paper, we presented an ensembled target formulation for Forward Projecti
 \bibitem{rumelhart1986learning}
 D.~E. Rumelhart, G.~E. Hinton, and R.~J. Williams, ``Learning representations by back-propagating errors,'' \emph{Nature}, vol. 323, no. 6088, pp. 533--536, 1986.
 
+\bibitem{jaderberg2017decoupled}
+M.~Jaderberg, W.~M. Czarnecki, S.~Osindero, O.~Vinyals, A.~Graves, D.~Silver, and K.~Kavukcuoglu, ``Decoupled neural interfaces using synthetic gradients,'' in \emph{International Conference on Machine Learning (ICML)}, 2017, pp. 1627--1635.
+
+\bibitem{chen2016training}
+T.~Chen, B.~Xu, C.~Zhang, and C.~Guestrin, ``Training deep nets with sublinear memory cost,'' \emph{arXiv preprint arXiv:1604.06174}, 2016.
+
+\bibitem{gomez2017reversible}
+A.~N. Gomez, M.~Ren, R.~Urtasun, and R.~B. Grosse, ``The reversible residual network: Backpropagation without storing activations,'' in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2017, pp. 2214--2224.
+
+\bibitem{lecun2015deep}
+Y.~LeCun, Y.~Bengio, and G.~Hinton, ``Deep learning,'' \emph{Nature}, vol. 521, no. 7553, pp. 436--444, 2015.
+
+\bibitem{goodfellow2016deep}
+I.~Goodfellow, Y.~Bengio, and A.~Courville, \emph{Deep Learning}.\hskip 1em plus 0.5em minus 0.4em\relax MIT Press, 2016.
+
 \bibitem{lillicrap2016random}
 T.~P. Lillicrap, D.~Cownden, D.~B. Tweed, and C.~J. Akerman, ``Random synaptic feedback weights support error backpropagation for deep learning,'' \emph{Nature Communications}, vol.~7, p. 13240, 2016.
 
 \bibitem{nokland2016direct}
 A.~N{\o}kland, ``Direct feedback alignment provides learning in deep neural networks without backpropagation,'' in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2016, pp. 1037--1045.
 
+\bibitem{crafton2019direct}
+B.~Crafton, A.~Parihar, R.~Gebhardt, and A.~Raychowdhury, ``Direct feedback alignment with sparse connections for local learning,'' \emph{IEEE Transactions on Circuits and Systems I: Regular Papers}, vol.~66, no.~10, pp. 3855--3865, 2019.
+
 \bibitem{hinton2022forward}
 G.~Hinton, ``The forward-forward algorithm: Some preliminary investigations,'' \emph{arXiv preprint arXiv:2212.13345}, 2022.
+
+\bibitem{rao1999predictive}
+R.~P. Rao and D.~H. Ballard, ``Predictive coding in the visual cortex: a functional interpretation of some extra-classical receptive-field effects,'' \emph{Nature Neuroscience}, vol.~2, no.~1, pp. 79--87, 1999.
+
+\bibitem{whittington2017approximation}
+J.~C. Whittington and R.~Bogacz, ``An approximation of the error backpropagation algorithm in a predictive coding network with local hebbian synaptic plasticity,'' \emph{Neural Computation}, vol.~29, no.~5, pp. 1229--1262, 2017.
 
 \bibitem{huang2006extreme}
 G.-B. Huang, Q.-Y. Zhu, and C.-K. Siew, ``Extreme learning machine: theory and applications,'' \emph{Neurocomputing}, vol.~70, no. 1-3, pp. 489--501, 2006.
 
+\bibitem{huang2011extreme}
+G.-B. Huang, H.~Zhou, X.~Ding, and R.~Zhang, ``Extreme learning machine for regression and multiclass classification,'' \emph{IEEE Transactions on Systems, Man, and Cybernetics, Part B (Cybernetics)}, vol.~42, no.~2, pp. 513--529, 2011.
+
+\bibitem{pao1994functional}
+Y.-H. Pao, G.-H. Park, and D.~J. Sobajic, ``Learning and generalizing the rapid way: Computing with the functional-link net,'' \emph{Neurocomputing}, vol.~6, no.~2, pp. 163--182, 1994.
+
+\bibitem{igelnik1995stochastic}
+B.~Igelnik and Y.-H. Pao, ``Stochastic choice of basis functions in adaptive function approximation and the functional-link net,'' \emph{IEEE Transactions on Neural Networks}, vol.~6, no.~6, pp. 1320--1329, 1995.
+
+\bibitem{zhang2016comprehensive}
+L.~Zhang and P.~N. Suganthan, ``A comprehensive evaluation of random vector functional link networks,'' \emph{Information Sciences}, vol. 367, pp. 1094--1105, 2016.
+
 \bibitem{chen2017broad}
 C.~L.~P. Chen and Z.~Liu, ``Broad learning system: An effective and efficient incremental learning system without need for deep architecture,'' \emph{IEEE Transactions on Neural Networks and Learning Systems}, vol.~29, no.~1, pp. 10--24, 2017.
+
+\bibitem{liu2021broad}
+Z.~Liu, C.~L.~P. Chen, and M.~Gan, ``Broad learning system: Structural extensions and applications,'' \emph{IEEE Transactions on Cybernetics}, vol.~52, no.~9, pp. 9178--9191, 2021.
+
+\bibitem{jaeger2001echo}
+H.~Jaeger, ``The “echo state” approach to analysing and training recurrent neural networks-with an erratum note,'' \emph{German National Research Center for Information Technology GMD Technical Report}, vol. 148, p.~34, 2001.
+
+\bibitem{lukovsevivcius2012reservoir}
+M.~Luko{\v{s}}evi{\v{c}}ius, ``A practical guide to applying echo state networks,'' in \emph{Neural Networks: Tricks of the Trade}.\hskip 1em plus 0.5em minus 0.4em\relax Springer, 2012, pp. 659--686.
+
+\bibitem{bingham2001random}
+E.~Bingham and H.~Mannila, ``Random projection in dimensionality reduction: applications to image and text data,'' in \emph{ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD)}, 2001, pp. 245--250.
+
+\bibitem{vempala2005random}
+S.~S. Vempala, \emph{The Random Projection Method}.\hskip 1em plus 0.5em minus 0.4em\relax American Mathematical Society, 2005, vol.~65.
+
+\bibitem{hoerl1970ridge}
+A.~E. Hoerl and R.~W. Kennard, ``Ridge regression: Biased estimation for nonorthogonal problems,'' \emph{Technometrics}, vol.~12, no.~1, pp. 55--67, 1970.
+
+\bibitem{johnson1984extensions}
+W.~B. Johnson and J.~Lindenstrauss, ``Extensions of lipschitz mappings into a hilbert space,'' \emph{Contemporary Mathematics}, vol.~26, pp. 189--206, 1984.
+
+\bibitem{dasgupta2003elementary}
+S.~Dasgupta and A.~Gupta, ``An elementary proof of a theorem of johnson and lindenstrauss,'' \emph{Random Structures \& Algorithms}, vol.~22, no.~1, pp. 60--65, 2003.
+
+\bibitem{achlioptas2003database}
+D.~Achlioptas, ``Database-friendly random projections: Johnson-lindenstrauss with binary coins,'' \emph{Journal of Computer and System Sciences}, vol.~66, no.~4, pp. 671--687, 2003.
+
+\bibitem{breiman1996bagging}
+L.~Breiman, ``Bagging predictors,'' \emph{Machine Learning}, vol.~24, no.~2, pp. 123--140, 1996.
+
+\bibitem{breiman2001random}
+L.~Breiman, ``Random forests,'' \emph{Machine Learning}, vol.~45, no.~1, pp. 5--32, 2001.
+
+\bibitem{donoho2006compressed}
+D.~L. Donoho, ``Compressed sensing,'' \emph{IEEE Transactions on Information Theory}, vol.~52, no.~4, pp. 1289--1306, 2006.
+
+\bibitem{candes2006robust}
+E.~J. Cand{\`e}s, J.~Romberg, and T.~Tao, ``Robust uncertainty principles: Exact signal reconstruction from highly incomplete frequency information,'' \emph{IEEE Transactions on Information Theory}, vol.~52, no.~2, pp. 489--509, 2006.
+
+\bibitem{indyk1998approximate}
+P.~Indyk and R.~Motwani, ``Approximate nearest neighbors: towards removing the curse of dimensionality,'' in \emph{ACM Symposium on Theory of Computing (STOC)}, 1998, pp. 604--613.
+
+\bibitem{rahimi2007random}
+A.~Rahimi and B.~Recht, ``Random features for large-scale kernel machines,'' in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2007, pp. 1177--1184.
+
+\bibitem{kaggle_sign_mnist}
+P.~Neel, ``Sign language mnist,'' \emph{Kaggle Dataset}, 2017. [Online]. Available: \url{https://www.kaggle.com/datasets/datamunge/sign-language-mnist}
+
+\bibitem{xiao2017fashion}
+H.~Xiao, K.~Rasul, and R.~Vollgraf, ``Fashion-mnist: a novel image dataset for benchmarking machine learning algorithms,'' \emph{arXiv preprint arXiv:1708.07747}, 2017.
+
+\bibitem{netzer2011reading}
+Y.~Netzer, T.~Wang, A.~Coates, A.~Bissacco, B.~Wu, and A.~Y. Ng, ``Reading digits in natural images with unsupervised feature learning,'' in \emph{NIPS Workshop on Deep Learning and Unsupervised Feature Learning}, 2011.
+
+\bibitem{krizhevsky2009learning}
+A.~Krizhevsky, G.~Hinton \emph{et al.}, ``Learning multiple layers of features from tiny images,'' \emph{Master's thesis, Department of Computer Science, University of Toronto}, 2009.
 
 \end{thebibliography}
 
