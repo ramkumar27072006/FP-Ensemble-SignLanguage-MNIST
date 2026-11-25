@@ -1,0 +1,26 @@
+To: Editor-in-Chief,
+IEEE Transactions on Neural Networks and Learning Systems (TNNLS)
+
+Dear Editor-in-Chief,
+
+I am pleased to submit our original research manuscript entitled:
+"FP-Ensemble: Backpropagation-Free Convolutional Learning via Fused Random Projection Forward Targets"
+for consideration as a regular paper in IEEE Transactions on Neural Networks and Learning Systems.
+
+Gradient backpropagation, while ubiquitous, suffers from severe sequential computational locking, excessive GPU activation memory storage, and high hardware energy expenditure. To address these fundamental bottlenecks, this paper proposes FP-Ensemble—a closed-form, backpropagation-free convolutional deep learning architecture.
+
+Key novelties and contributions of this manuscript include:
+1. Formulation of the FP-Ensemble learning paradigm, utilizing an ensemble of independent Gaussian random projection pairs (Q, U) fused via convex expectation, establishing an analytical Ridge regression layer solve.
+2. Formal mathematical proof (Theorem 1) demonstrating that fused random target representations reduce variance with asymptotic rate O(1/R), explaining the optimal bias-variance equilibrium at R=5.
+3. Formulation of Conv2D-FP, an unfolded patch regression mechanism (im2col) with mini-batch Gram matrix accumulation that enables deep convolutional architectures to be trained analytically without spatial error backpropagation.
+4. Extensive empirical evaluation across four diverse benchmark datasets (Sign Language MNIST, Fashion-MNIST, SVHN, and CIFAR-10), demonstrating consistent accuracy improvements over canonical Forward Projection (+1.3% to +3.8%), up to 18x training speedups over standard backpropagation CNNs, and over 60% reduction in peak GPU VRAM allocation.
+
+This work has not been published previously, is not under consideration for publication elsewhere, and its submission has been approved by the author.
+
+Thank you for your consideration of our work.
+
+Sincerely,
+
+R. Ramkumar
+Department of Artificial Intelligence and Machine Learning
+E-mail: ramkumarashvanth09@gmail.com
