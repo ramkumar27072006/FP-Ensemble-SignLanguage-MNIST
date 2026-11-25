@@ -4,23 +4,30 @@ IEEE Transactions on Neural Networks and Learning Systems (TNNLS)
 Dear Editor-in-Chief,
 
 I am pleased to submit our original research manuscript entitled:
-"FP-Ensemble: Backpropagation-Free Convolutional Learning via Fused Random Projection Forward Targets"
+"Closed-Form Convolutional Learning via Ensembled Random Projection Targets"
 for consideration as a regular paper in IEEE Transactions on Neural Networks and Learning Systems.
 
-Gradient backpropagation, while ubiquitous, suffers from severe sequential computational locking, excessive GPU activation memory storage, and high hardware energy expenditure. To address these fundamental bottlenecks, this paper proposes FP-Ensemble—a closed-form, backpropagation-free convolutional deep learning architecture.
+Author Information:
+Ramkumar R
+Department of Artificial Intelligence and Machine Learning
+Amrita Vishwa Vidyapeetham, Coimbatore, Tamil Nadu, India
+ORCID: 0009-0007-0076-8107
+E-mail: cb.ai.u4aim24033@cb.students.amrita.edu, ramkumarashvanth09@gmail.com
 
-Key novelties and contributions of this manuscript include:
-1. Formulation of the FP-Ensemble learning paradigm, utilizing an ensemble of independent Gaussian random projection pairs (Q, U) fused via convex expectation, establishing an analytical Ridge regression layer solve.
-2. Formal mathematical proof (Theorem 1) demonstrating that fused random target representations reduce variance with asymptotic rate O(1/R), explaining the optimal bias-variance equilibrium at R=5.
-3. Formulation of Conv2D-FP, an unfolded patch regression mechanism (im2col) with mini-batch Gram matrix accumulation that enables deep convolutional architectures to be trained analytically without spatial error backpropagation.
-4. Extensive empirical evaluation across four diverse benchmark datasets (Sign Language MNIST, Fashion-MNIST, SVHN, and CIFAR-10), demonstrating consistent accuracy improvements over canonical Forward Projection (+1.3% to +3.8%), up to 18x training speedups over standard backpropagation CNNs, and over 60% reduction in peak GPU VRAM allocation.
+This paper addresses the fundamental bottlenecks of error backpropagation—sequential backward locking, substantial activation memory retention, and non-convex optimization traps—by formulating an analytical, backpropagation-free convolutional architecture using ensembled random projection targets.
 
-This work has not been published previously, is not under consideration for publication elsewhere, and its submission has been approved by the author.
+Key Contributions of this Work:
+1. Target Ensembling Formulation: Combines R independent Gaussian random projection pairs fused via uniform expectation, establishing an analytical ridge regression solve that stabilizes layer target representations.
+2. Formal Variance Reduction Theorem: We provide a mathematical proof establishing that target entry variance decreases at an asymptotic rate of O(1/R), explaining the optimal bias-variance equilibrium observed at R=5.
+3. Conv2D Patch Unfolding (im2col): Implements spatial patch unfolding with mini-batch Gram matrix accumulation, allowing deep convolutional networks to be trained layer by layer in a single forward pass without backpropagating spatial errors.
+4. Extensive Empirical Validation: Evaluated across four benchmark datasets (Sign Language MNIST, Fashion-MNIST, SVHN, and CIFAR-10), demonstrating consistent accuracy improvements over canonical Forward Projection (+1.3% on Sign Language MNIST) while delivering 4x to 11x wall-clock training speedups over backpropagation CNNs.
 
-Thank you for your consideration of our work.
+This manuscript represents original work that has not been published previously and is not currently under consideration for publication elsewhere.
+
+Thank you for your consideration.
 
 Sincerely,
 
-R. Ramkumar
-Department of Artificial Intelligence and Machine Learning
-E-mail: ramkumarashvanth09@gmail.com
+Ramkumar R
+Amrita Vishwa Vidyapeetham, Coimbatore
+cb.ai.u4aim24033@cb.students.amrita.edu
